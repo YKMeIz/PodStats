@@ -1,0 +1,19 @@
+#!/bin/bash
+
+CURRENT=$PWD
+CONTAINER_BUILDER=podman
+
+rm -rf /tmp/podstats/
+mkdir -p /tmp/podstats/build/ || exit 1
+#CGO_ENABLED=0 go build -v -o /tmp/podstats/build/podstats cmd/podstats/main.go || exit 1
+$CONTAINER_BUILDER run --rm \
+  -v /tmp/podstats/build/:/tmp/podstats/build/ \
+  -v "$PWD":/podstats \
+  -i registry.access.redhat.com/ubi8/ubi \
+  /bin/bash -c "dnf install -y golang gpgme-devel device-mapper-devel pkgconf libassuan-devel && cd /podstats && go mod tidy && go build -tags exclude_graphdriver_btrfs -v -o /tmp/podstats/build/podstats /podstats/cmd/*.go" || exit 1
+#go build -v -o /tmp/podstats/build/podstats cmd/podstats/main.go || exit 1
+cp build/Dockerfile /tmp/podstats/build/ || exit 1
+cp -r build/dist /tmp/podstats/build/ || exit 1
+cd /tmp/podstats/build/ && $CONTAINER_BUILDER build -t podstats:"$(date +"%Y%m%d")" .
+cd $CURRENT && rm -rf /tmp/podstats/
+$CONTAINER_BUILDER rmi registry.access.redhat.com/ubi8/ubi:latest
